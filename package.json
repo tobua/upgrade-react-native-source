@@ -1,0 +1,84 @@
+{
+  "name": "upgrade-react-native-source",
+  "description": "Modernizes the JavaScript npm package code for React Native to work with bundlers and runtimes other than Metro or Jest.",
+  "version": "0.0.0-development",
+  "repository": "github:tobua/upgrade-react-native-source",
+  "license": "MIT",
+  "author": "Matthias Giger",
+  "scripts": {
+    "check": "biome check --write .",
+    "test": "bun test --preload ./cli.ts",
+    "types": "tsc"
+  },
+  "dependencies": {
+    "flow-remove-types": "^2.245.0"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^1.8.3",
+    "@types/bun": "^1.1.8",
+    "react-native": "^0.75.2",
+    "typescript": "^5.5.4",
+    "zero-configuration": "^0.17.3"
+  },
+  "peerDependencies": {
+    "react-native": ">= 0.75"
+  },
+  "peerDependenciesMeta": {
+    "react-native": {
+      "optional": true
+    }
+  },
+  "sideEffects": false,
+  "main": "./index.ts",
+  "exports": {
+    ".": "./index.ts",
+    "./mock": "./mock.ts"
+  },
+  "trustedDependencies": [
+    "zero-configuration"
+  ],
+  "type": "module",
+  "bin": "./cli.ts",
+  "files": [
+    "files",
+    "*.ts"
+  ],
+  "keywords": [
+    "react-native",
+    "upgrade",
+    "esm"
+  ],
+  "publishConfig": {
+    "provenance": false
+  },
+  "configuration": {
+    "gitignore": "recommended",
+    "vscode": "biome",
+    "license": "MIT",
+    "biome": {
+      "extends": "recommended",
+      "linter": {
+        "rules": {
+          "correctness": {
+            "noNodejsModules": "off"
+          },
+          "suspicious": {
+            "noConsoleLog": "off"
+          }
+        }
+      },
+      "files": {
+        "ignore": [
+          "files"
+        ]
+      }
+    },
+    "typescript": {
+      "extends": "plugin",
+      "files": [
+        "index.ts",
+        "cli.ts"
+      ]
+    }
+  }
+}
