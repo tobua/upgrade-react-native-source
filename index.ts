@@ -5,7 +5,8 @@ import flowRemoveTypes from 'flow-remove-types'
 
 const globFiles = (glob: string) => new Glob(glob)
 
-async function cleanPackage(name: string) {
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Optimize later...
+async function cleanPackage(name: string, checkImport = false) {
   console.log(`Cleaning package ${name}.`)
   console.log('Removing flow types...')
 
@@ -15,6 +16,11 @@ async function cleanPackage(name: string) {
     const contents = await Bun.file(file).text()
     await Bun.write(file, flowRemoveTypes(contents).toString())
   }
+  console.log('Converting package to ESM.')
+  const packagePath = `node_modules/${name}/package.json`
+  const packageJson = await Bun.file(packagePath).json()
+  packageJson.type = 'module'
+  await Bun.write(packagePath, JSON.stringify(packageJson, null, 2))
   console.log('Converting entry file to ESM.')
   if (name === 'react-native') {
     cpSync('files/react-native-index-esm.js', `node_modules/${name}/index.js`)
@@ -47,9 +53,13 @@ async function cleanPackage(name: string) {
     let contents = await Bun.file(file).text()
     contents = contents.replace(/module\.exports\s*=\s*/g, 'export default ')
     contents = contents.replace("export default require('../Components/UnimplementedViews/UnimplementedView');", '') // Double default export error.
-    if (contents.includes('export *') && contents.includes('export default')) {
+    if (contents.includes('export *')) {
       // TODO merge export * into export default.
+      if (contents.includes('export default')) {
+        console.log('TODO merge double exports', file)
+      }
       // "exports *" (not needed) and export default often found in same file...
+
       contents = contents.replace(/^\s*export \*.*$/gm, '')
     }
     if (file.includes('Core/ExceptionsManager.js') && !contents.includes('SyntheticRenamedError')) {
@@ -60,6 +70,16 @@ async function cleanPackage(name: string) {
 export const SyntheticError =  SyntheticRenamedError`
     }
     await Bun.write(file, contents)
+
+    if (checkImport) {
+      if (file.includes('/react-native/Libraries')) {
+        try {
+          await import(`./${file}`)
+        } catch (error) {
+          console.error(error, file)
+        }
+      }
+    }
   }
 }
 
