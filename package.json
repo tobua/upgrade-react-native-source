@@ -11,7 +11,7 @@
     "types": "tsc"
   },
   "dependencies": {
-    "flow-remove-types": "^2.245.0"
+    "flow-remove-types": "^2.245.2"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.8.3",

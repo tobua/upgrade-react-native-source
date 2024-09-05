@@ -5,28 +5,52 @@ import flowRemoveTypes from 'flow-remove-types'
 
 const globFiles = (glob: string) => new Glob(glob)
 
+const imports: {
+  success: string[]
+  failure: { name: string; error: unknown }[]
+} = { success: [], failure: [] }
+
+function resetImports() {
+  imports.success = []
+  imports.failure = []
+}
+
+const fileOverrides = [
+  {
+    local: 'files/react-native-index-esm.js',
+    package: 'node_modules/react-native/index.js',
+  },
+  {
+    local: 'files/react-native-private-interface.js',
+    package: 'node_modules/react-native/Libraries/ReactPrivate/ReactNativePrivateInterface.js',
+  },
+  {
+    local: 'files/react-native-platform.js',
+    package: 'node_modules/react-native/Libraries/Utilities/Platform.js',
+  },
+]
+
+const overrideFiles = fileOverrides.map((override) => override.package)
+
 // biome-ignore lint/complexity/noExcessiveCognitiveComplexity: Optimize later...
-async function cleanPackage(name: string, checkImport = false) {
+async function cleanPackage(name: string, checkImport: boolean) {
   console.log(`Cleaning package ${name}.`)
   console.log('Removing flow types...')
-
   // Removes flow type annotations that cannot be parsed by Bun from 'react-native' package.
   // @ts-ignore module: "preserve" required for imports to work.
   for await (const file of globFiles(`node_modules/${name}/**/*.js`).scan('.')) {
     const contents = await Bun.file(file).text()
     await Bun.write(file, flowRemoveTypes(contents).toString())
   }
+  console.log('Applying file overrides.')
+  for (const override of fileOverrides) {
+    cpSync(override.local, override.package)
+  }
   console.log('Converting package to ESM.')
   const packagePath = `node_modules/${name}/package.json`
   const packageJson = await Bun.file(packagePath).json()
   packageJson.type = 'module'
   await Bun.write(packagePath, JSON.stringify(packageJson, null, 2))
-  console.log('Converting entry file to ESM.')
-  if (name === 'react-native') {
-    cpSync('files/react-native-index-esm.js', `node_modules/${name}/index.js`)
-    cpSync('files/react-native-private-interface.js', `node_modules/${name}/Libraries/ReactPrivate/ReactNativePrivateInterface.js`)
-  }
-
   const platform: 'ios' | 'android' = 'ios'
   console.log(`Moving platform specific files for "${platform}" in...`)
   // @ts-ignore module: "preserve" required for imports to work.
@@ -50,13 +74,17 @@ async function cleanPackage(name: string, checkImport = false) {
   console.log('Updating files with old CJS export syntax...')
   // @ts-ignore module: "preserve" required for imports to work.
   for await (const file of globFiles(`node_modules/${name}/**/*.js`).scan('.')) {
+    if (overrideFiles.includes(file)) {
+      console.log('skip')
+      continue
+    }
     let contents = await Bun.file(file).text()
     contents = contents.replace(/module\.exports\s*=\s*/g, 'export default ')
     contents = contents.replace("export default require('../Components/UnimplementedViews/UnimplementedView');", '') // Double default export error.
     if (contents.includes('export *')) {
       // TODO merge export * into export default.
       if (contents.includes('export default')) {
-        console.log('TODO merge double exports', file)
+        // console.log("TODO merge double exports", file);
       }
       // "exports *" (not needed) and export default often found in same file...
 
@@ -75,17 +103,23 @@ export const SyntheticError =  SyntheticRenamedError`
       if (file.includes('/react-native/Libraries')) {
         try {
           await import(`./${file}`)
+          imports.success.push(file)
         } catch (error) {
-          console.error(error, file)
+          imports.failure.push({ name: file, error })
         }
       }
     }
   }
 }
 
-export async function transform() {
-  await cleanPackage('react-native')
-  await cleanPackage('@react-native/virtualized-lists')
+export async function transform(checkImport = false) {
+  resetImports()
+  await cleanPackage('react-native', checkImport)
+  await cleanPackage('@react-native/virtualized-lists', checkImport)
+
+  if (checkImport) {
+    return imports
+  }
 
   return true
 }
